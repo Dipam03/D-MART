@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>DipamShop — Mini Flipkart-like App</title>
+
+<!-- EmailJS SDK (client-side) -->
+<script src="https://cdn.jsdelivr.net/npm/emailjs-com@3.2.0/dist/email.min.js"></script>
+
+<style>
+  :root{
+    --primary:#2874f0; /* flipkart-like blue */
+    --accent:#ff6f00;
+    --muted:#666;
+    --card:#fff;
+    --bg:#f3f4f6;
+    --maxw:1100px;
+  }
+  *{box-sizing:border-box}
+  body{font-family:Inter,Arial,Helvetica,sans-serif;background:var(--bg);margin:0;padding:0;display:flex;justify-content:center}
+  .app{width:100%;max-width:var(--maxw);padding:16px}
+  header{display:flex;align-items:center;gap:12px;background:var(--primary);color:#fff;padding:12px;border-radius:8px}
+  .logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:1.1rem}
+  .search {flex:1;display:flex;gap:8px}
+  .search input{flex:1;padding:8px;border-radius:6px;border:0;font-size:14px}
+  .icon-btn{background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.18);padding:8px 10px;border-radius:8px;cursor:pointer}
+  main{display:grid;grid-template-columns:250px 1fr;gap:16px;margin-top:14px}
+  @media (max-width:900px){ main{grid-template-columns:1fr} .left-col{order:2} }
+  /* left sidebar */
+  .left-col{background:var(--card);padding:12px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.04)}
+  .cat{font-weight:700;margin-bottom:8px}
+  .cat-list button{display:block;width:100%;text-align:left;padding:8px;border-radius:6px;border:0;background:transparent;cursor:pointer}
+  /* product grid */
+  .store{display:grid;gap:12px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  @media (max-width:1100px){ .grid{grid-template-columns:repeat(2,1fr)} }
+  @media (max-width:600px){ .grid{grid-template-columns:1fr} }
+  .card{background:var(--card);padding:12px;border-radius:10px;box-shadow:0 8px 20px rgba(10,10,10,0.04);display:flex;flex-direction:column;gap:8px}
+  .card img{width:100%;height:170px;object-fit:cover;border-radius:8px}
+  .card h3{margin:0;font-size:1rem}
+  .price{font-weight:700;color:var(--primary)}
+  .card .actions{display:flex;gap:8px;margin-top:auto}
+  .btn{padding:8px;border-radius:8px;border:0;cursor:pointer}
+  .btn.primary{background:var(--primary);color:#fff}
+  .btn.ghost{background:transparent;border:1px solid #ddd}
+  /* cart drawer */
+  .cart-drawer{position:fixed;right:18px;top:18px;background:var(--card);width:360px;max-width:92vw;border-radius:10px;box-shadow:0 20px 60px rgba(10,10,10,0.25);z-index:200;display:none;flex-direction:column}
+  .cart-drawer.open{display:flex}
+  .cart-header{display:flex;justify-content:space-between;align-items:center;padding:12px;border-bottom:1px solid #eee}
+  .cart-body{padding:12px;max-height:60vh;overflow:auto}
+  .cart-item{display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #f1f1f1}
+  .cart-item img{width:64px;height:64px;object-fit:cover;border-radius:8px}
+  .qty{display:flex;gap:6px;align-items:center}
+  .checkout-row{padding:12px;border-top:1px solid #eee;display:flex;justify-content:space-between;align-items:center}
+  /* admin modal */
+  .modal-back{position:fixed;inset:0;background:rgba(0,0,0,0.45);display:none;align-items:center;justify-content:center;z-index:300}
+  .modal{width:100%;max-width:720px;background:#fff;padding:16px;border-radius:10px}
+  .form-row{display:flex;gap:8px}
+  .form-row > *{flex:1}
+  .small{font-size:13px;color:var(--muted)}
+  /* tiny footer actions */
+  .top-actions{display:flex;gap:8px;align-items:center}
+  .badge{background:#fff;color:var(--primary);padding:6px 8px;border-radius:999px;font-weight:700}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header>
+    <div class="logo">DipamShop</div>
+
+    <div class="search">
+      <input id="searchInput" placeholder="Search for products, brands and more" />
+      <button class="icon-btn" id="searchBtn">Search</button>
+    </div>
+
+    <div class="top-actions">
+      <div class="badge" id="cartCount">0</div>
+      <button class="icon-btn" id="toggleCart">Cart</button>
+      <button class="icon-btn" id="openAdminBtn">Admin</button>
+    </div>
+  </header>
+
+  <main>
+    <aside class="left-col">
+      <div class="cat">Categories</div>
+      <div class="cat-list" id="categoryList"></div>
+      <hr style="margin:12px 0" />
+      <div class="small">Admin tip: Use <strong>Admin</strong> to add products</div>
+    </aside>
+
+    <section class="store">
+      <div style="display:flex;justify-content:space-between;align-items:end">
+        <h2 style="margin:0">Products</h2>
+        <div class="small" id="productCount">0 items</div>
+      </div>
+
+      <div class="grid" id="productGrid"></div>
+    </section>
+  </main>
+</div>
+
+<!-- Cart drawer -->
+<div class="cart-drawer" id="cartDrawer" aria-hidden="true">
+  <div class="cart-header">
+    <div style="font-weight:700">Your Cart</div>
+    <div>
+      <button id="clearCartBtn" class="btn ghost">Clear</button>
+      <button id="closeCartBtn" class="btn">✕</button>
+    </div>
+  </div>
+  <div class="cart-body" id="cartBody"></div>
+  <div class="checkout-row">
+    <div>
+      <div class="small">Total</div>
+      <div id="cartTotal" style="font-weight:800">₹0.00</div>
+    </div>
+    <div>
+      <button class="btn primary" id="checkoutBtn">Checkout</button>
+    </div>
+  </div>
+</div>
+
+<!-- Admin modal -->
+<div class="modal-back" id="adminModal">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h3>Admin Panel</h3>
+      <div>
+        <button id="closeAdmin" class="btn ghost">Close</button>
+      </div>
+    </div>
+
+    <div style="margin-top:12px">
+      <div class="small">Add product (images stored locally in browser)</div>
+
+      <form id="productForm" style="margin-top:10px;display:grid;gap:8px" autocomplete="off">
+        <input id="prodTitle" placeholder="Product title" required />
+        <div class="form-row">
+          <input id="prodPrice" type="number" step="0.01" placeholder="Price (₹)" required />
+          <input id="prodCategory" placeholder="Category (e.g., Electronics)" required />
+        </div>
+        <input id="prodImage" type="file" accept="image/*" />
+        <div style="display:flex;gap:8px">
+          <button class="btn primary" type="submit">Add product</button>
+          <button class="btn ghost" id="importSampleBtn" type="button">Add sample product</button>
+        </div>
+      </form>
+
+      <hr/>
+      <div>
+        <h4>Your Products</h4>
+        <div id="adminProductList" style="display:grid;gap:8px;margin-top:8px;max-height:240px;overflow:auto"></div>
+      </div>
+
+      <hr/>
+      <div>
+        <label class="small">Admin password (to open admin):</label>
+        <input id="adminPassword" placeholder="Set a password, same persists in localStorage" />
+        <div class="small">Set or change the password here. Keep it safe.</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Checkout modal -->
+<div class="modal-back" id="checkoutModal">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h3>Checkout</h3>
+      <button id="closeCheckout" class="btn ghost">Close</button>
+    </div>
+
+    <div id="checkoutSummary" style="margin-top:8px"></div>
+
+    <form id="checkoutForm" style="display:grid;gap:8px;margin-top:10px">
+      <input id="custName" placeholder="Full name" required />
+      <input id="custPhone" placeholder="Phone number" required />
+      <textarea id="custAddress" rows="3" placeholder="Shipping address" required></textarea>
+
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="flex:1">
+          <div class="small">Total amount</div>
+          <div id="checkoutAmount" style="font-weight:800">₹0.00</div>
+        </div>
+        <button class="btn primary" type="submit">Place Order</button>
+      </div>
+    </form>
+
+    <div id="orderMsg" style="display:none;margin-top:10px;color:green;font-weight:700"></div>
+  </div>
+</div>
+
+<script>
+/* =========================
+   Basic app state & storage
+   ========================= */
+const PRODUCTS_KEY = 'dipam_products_v1';
+const CART_KEY = 'dipam_cart_v1';
+const ADMIN_PASS_KEY = 'dipam_admin_pass';
+
+let products = JSON.parse(localStorage.getItem(PRODUCTS_KEY) || '[]');
+let cart = JSON.parse(localStorage.getItem(CART_KEY) || '[]'); // {id, qty}
+let adminPassword = localStorage.getItem(ADMIN_PASS_KEY) || '';
+
+/* ---------- EmailJS setup ----------
+  You MUST replace these placeholders with values from your EmailJS account:
+    - EMAILJS_SERVICE_ID
+    - EMAILJS_TEMPLATE_ID
+    - EMAILJS_PUBLIC_KEY (user/public key)
+
+  Steps:
+  1. Sign up at https://www.emailjs.com
+  2. Add an Email Service (e.g., Gmail via OAuth or SMTP)
+  3. Create an Email Template and include template variables you will use below.
+     Example template variables we send: from_name, to_email, order_id, order_items, amount, phone, address
+  4. Copy Service ID, Template ID, and Public Key and paste into the placeholders below.
+------------------------------------ */
+const EMAILJS_SERVICE_ID = 'YOUR_SERVICE_ID';
+const EMAILJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID';
+const EMAILJS_PUBLIC_KEY = 'YOUR_PUBLIC_KEY';
+const ORDER_NOTIFICATION_EMAIL = 'dipamghosh85@gmail.com'; // recipient (you)
+
+/* Initialize EmailJS - will work after you set public key */
+if (window.emailjs && EMAILJS_PUBLIC_KEY && EMAILJS_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY') {
+  emailjs.init(EMAILJS_PUBLIC_KEY);
+}
+
+/* =========================
+   Utility functions
+   ========================= */
+function saveProducts(){ localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products)); }
+function saveCart(){ localStorage.setItem(CART_KEY, JSON.stringify(cart)); renderCart(); updateCartBadge(); }
+function setAdminPass(p){ adminPassword = p; localStorage.setItem(ADMIN_PASS_KEY,p); }
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function fmt(n){ return '₹' + Number(n).toFixed(2); }
+
+/* =========================
+   Rendering functions
+   ========================= */
+const productGrid = document.getElementById('productGrid');
+const productCountEl = document.getElementById('productCount');
+const categoryListEl = document.getElementById('categoryList');
+const adminProductList = document.getElementById('adminProductList');
+
+function categoriesFromProducts(){
+  const s = new Set(products.map(p => p.category || 'General'));
+  return ['All', ...Array.from(s)];
+}
+
+function renderCategories(){
+  categoryListEl.innerHTML = '';
+  categoriesFromProducts().forEach(cat=>{
+    const btn = document.createElement('button');
+    btn.textContent = cat;
+    btn.onclick = ()=>{ currentFilter = cat; renderProducts(); };
+    categoryListEl.appendChild(btn);
+  });
+}
+
+let currentFilter = 'All';
+let currentSearch = '';
+
+function renderProducts(){
+  const shown = products.filter(p=>{
+    if (currentFilter !== 'All' && p.category !== currentFilter) return false;
+    if (currentSearch && ! (p.title||'').toLowerCase().includes(currentSearch.toLowerCase()) ) return false;
+    return true;
+  });
+  productGrid.innerHTML = '';
+  productCountEl.textContent = `${shown.length} items`;
+  shown.forEach(p=>{
+    const card = document.createElement('div'); card.className = 'card';
+    card.innerHTML = `
+      <img src="${p.image}" alt="${escapeHtml(p.title)}" />
+      <h3>${escapeHtml(p.title)}</h3>
+      <div class="small">${escapeHtml(p.category || '')}</div>
+      <div class="price">${fmt(p.price)}</div>
+      <div class="actions">
+        <button class="btn" data-id="${p.id}" data-action="add">Add to Cart</button>
+        <button class="btn primary" data-id="${p.id}" data-action="buy">Buy Now</button>
+      </div>
+    `;
+    productGrid.appendChild(card);
+  });
+  renderCategories();
+  renderAdminProducts();
+}
+
+function renderAdminProducts(){
+  adminProductList.innerHTML = '';
+  if (products.length===0) { adminProductList.innerHTML = '<div class="small">No products yet</div>'; return; }
+  products.forEach((p, idx)=>{
+    const d = document.createElement('div');
+    d.style.display='flex'; d.style.gap='8px'; d.style.alignItems='center';
+    d.innerHTML = `
+      <img src="${p.image}" style="width:52px;height:52px;object-fit:cover;border-radius:6px" />
+      <div style="flex:1">
+        <div style="font-weight:700">${escapeHtml(p.title)}</div>
+        <div class="small">${escapeHtml(p.category)} • ${fmt(p.price)}</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn ghost" data-idx="${idx}" data-action="edit">Edit</button>
+        <button class="btn" data-idx="${idx}" data-action="del">Delete</button>
+      </div>
+    `;
+    adminProductList.appendChild(d);
+  });
+}
+
+/* =========================
+   Cart functions & UI
+   ========================= */
+const cartDrawer = document.getElementById('cartDrawer');
+const cartBody = document.getElementById('cartBody');
+const cartTotalEl = document.getElementById('cartTotal');
+const cartCountEl = document.getElementById('cartCount');
+
+function updateCartBadge(){
+  const qty = cart.reduce((s,c)=>s+c.qty,0);
+  cartCountEl.textContent = qty;
+}
+
+function renderCart(){
+  cartBody.innerHTML = '';
+  if (cart.length===0){ cartBody.innerHTML = '<div class="small">Cart is empty</div>'; cartTotalEl.textContent = fmt(0); return; }
+  let total = 0;
+  cart.forEach(ci=>{
+    const p = products.find(x=>x.id===ci.id);
+    if (!p) return;
+    total += p.price * ci.qty;
+    const node = document.createElement('div'); node.className='cart-item';
+    node.innerHTML = `
+      <img src="${p.image}" />
+      <div style="flex:1">
+        <div style="font-weight:700">${escapeHtml(p.title)}</div>
+        <div class="small">${fmt(p.price)}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:end;gap:6px">
+        <div class="qty">
+          <button class="btn ghost" data-action="dec" data-id="${ci.id}">-</button>
+          <div style="min-width:24px;text-align:center">${ci.qty}</div>
+          <button class="btn ghost" data-action="inc" data-id="${ci.id}">+</button>
+        </div>
+        <button class="btn" data-action="remove" data-id="${ci.id}">Remove</button>
+      </div>
+    `;
+    cartBody.appendChild(node);
+  });
+  cartTotalEl.textContent = fmt(total);
+  updateCartBadge();
+}
+
+/* Add to cart / remove / qty */
+function addToCart(id, qty=1){
+  const existing = cart.find(c=>c.id===id);
+  if (existing) existing.qty += qty;
+  else cart.push({id, qty});
+  saveCart();
+}
+
+function removeFromCart(id){
+  cart = cart.filter(c=>c.id!==id);
+  saveCart();
+}
+
+function changeQty(id, delta){
+  const c = cart.find(x=>x.id===id); if(!c) return;
+  c.qty += delta;
+  if (c.qty <= 0) removeFromCart(id);
+  else saveCart();
+}
+
+/* =========================
+   Product add/edit (admin)
+   ========================= */
+const productForm = document.getElementById('productForm');
+const prodTitle = document.getElementById('prodTitle');
+const prodPrice = document.getElementById('prodPrice');
+const prodCategory = document.getElementById('prodCategory');
+const prodImage = document.getElementById('prodImage');
+const importSampleBtn = document.getElementById('importSampleBtn');
+
+productForm.addEventListener('submit', e=>{
+  e.preventDefault();
+  const title = prodTitle.value.trim();
+  const price = Number(prodPrice.value);
+  const category = prodCategory.value.trim() || 'General';
+  const file = prodImage.files[0];
+  if (!title || !price) return alert('Enter title and price');
+  if (file){
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      products.push({ id: uid(), title, price, category, image: reader.result });
+      saveProducts(); renderProducts();
+      productForm.reset();
+      alert('Product added');
+    };
+    reader.readAsDataURL(file);
+  } else {
+    // add placeholder image
+    const svg = `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="100%" height="100%" fill="%23ddd"/><text x="50%" y="50%" font-size="24" text-anchor="middle" fill="%23888" dy=".3em">No Image</text></svg>')}`;
+    products.push({ id: uid(), title, price, category, image: svg });
+    saveProducts(); renderProducts();
+    productForm.reset(); alert('Product added without an image');
+  }
+});
+
+importSampleBtn.addEventListener('click', ()=>{
+  const svg = `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400"><rect width="100%" height="100%" fill="%23eee"/><text x="50%" y="50%" font-size="28" text-anchor="middle" fill="%23888" dy=".3em">Sample Product</text></svg>')}`;
+  products.push({ id: uid(), title: 'Sample Product', price: +(Math.random()*1000+100).toFixed(2), category: 'General', image: svg });
+  saveProducts(); renderProducts();
+});
+
+/* Admin product list actions (edit/delete) */
+adminProductList.addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  const idx = Number(btn.getAttribute('data-idx'));
+  const action = btn.getAttribute('data-action');
+  if (action === 'del'){
+    if (!confirm('Delete product?')) return;
+    products.splice(idx,1); saveProducts(); renderProducts();
+  } else if (action === 'edit'){
+    // prefill the form with product data for editing
+    const p = products[idx];
+    if (!p) return;
+    prodTitle.value = p.title;
+    prodPrice.value = p.price;
+    prodCategory.value = p.category;
+    // remove the product being edited (we will re-add on submit)
+    products.splice(idx,1); saveProducts(); renderProducts();
+    alert('Edit the fields and click "Add product" to save changes (image cannot be prefilled; re-upload if needed).');
+  }
+});
+
+/* =========================
+   UI interactions & events
+   ========================= */
+document.getElementById('searchBtn').addEventListener('click', ()=>{
+  currentSearch = document.getElementById('searchInput').value.trim();
+  renderProducts();
+});
+
+productGrid.addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  const id = btn.getAttribute('data-id');
+  const action = btn.getAttribute('data-action');
+  if (action === 'add') addToCart(id,1);
+  if (action === 'buy') {
+    // Setup quick checkout for single item
+    const p = products.find(x=>x.id===id);
+    openCheckoutModal([{ id: id, qty: 1 }], p.price * 1);
+  }
+});
+
+/* Cart drawer controls */
+document.getElementById('toggleCart').addEventListener('click', ()=>cartDrawer.classList.toggle('open'));
+document.getElementById('closeCartBtn').addEventListener('click', ()=>cartDrawer.classList.remove('open'));
+document.getElementById('clearCartBtn').addEventListener('click', ()=>{
+  if (!confirm('Clear cart?')) return;
+  cart = []; saveCart();
+});
+
+cartBody.addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  const action = btn.getAttribute('data-action');
+  const id = btn.getAttribute('data-id');
+  if (action === 'inc') changeQty(id, +1);
+  if (action === 'dec') changeQty(id, -1);
+  if (action === 'remove') removeFromCart(id);
+});
+
+/* Checkout flow */
+const checkoutModal = document.getElementById('checkoutModal');
+const checkoutForm = document.getElementById('checkoutForm');
+const checkoutAmountEl = document.getElementById('checkoutAmount');
+const checkoutSummary = document.getElementById('checkoutSummary');
+const orderMsg = document.getElementById('orderMsg');
+
+let checkoutItems = []; // array {id, qty}
+function openCheckoutModal(items, amount){
+  checkoutItems = items;
+  const lines = items.map(ci=>{
+    const p = products.find(x=>x.id===ci.id);
+    return `${p ? p.title : 'Unknown'} × ${ci.qty} (${fmt(p ? p.price*p.qty : 0)})`;
+  });
+  checkoutSummary.innerHTML = `<div class="small">Items:</div><div>${lines.join('<br/>')}</div>`;
+  checkoutAmountEl.textContent = fmt(amount);
+  orderMsg.style.display = 'none';
+  checkoutModal.style.display = 'flex';
+}
+
+document.getElementById('checkoutBtn').addEventListener('click', ()=>{
+  if (cart.length===0) return alert('Cart empty');
+  const total = cart.reduce((s,c)=> s + ((products.find(p=>p.id===c.id)||{price:0}).price * c.qty), 0);
+  openCheckoutModal(cart.map(c=>({id:c.id, qty:c.qty})), total);
+});
+
+document.getElementById('closeCheckout').addEventListener('click', ()=> checkoutModal.style.display = 'none');
+
+checkoutForm.addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const name = document.getElementById('custName').value.trim();
+  const phone = document.getElementById('custPhone').value.trim();
+  const address = document.getElementById('custAddress').value.trim();
+  if (!name || !phone || !address) return alert('Fill all fields');
+
+  // Build order details
+  const items = checkoutItems.map(ci=>{
+    const p = products.find(x=>x.id===ci.id);
+    return { title: p ? p.title : 'Unknown', qty: ci.qty, price: p ? p.price : 0 };
+  });
+  const amount = items.reduce((s,it)=> s + (it.price * it.qty), 0);
+  const orderId = 'ORD-' + uid().toUpperCase();
+
+  // Send email through EmailJS (client-side)
+  if (!EMAILJS_SERVICE_ID || EMAILJS_SERVICE_ID === 'YOUR_SERVICE_ID' ||
+      !EMAILJS_TEMPLATE_ID || EMAILJS_TEMPLATE_ID === 'YOUR_TEMPLATE_ID' ||
+      !EMAILJS_PUBLIC_KEY || EMAILJS_PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
+    // If EmailJS not configured, still show a local confirmation
+    orderMsg.style.display = 'block';
+    orderMsg.innerHTML = `Order ${orderId} placed locally. Email not sent — configure EmailJS keys in the HTML.`;
+    // After placing order, clear cart if we checked out cart
+    if (checkoutItems.length === cart.length) { cart = []; saveCart(); }
+    return;
+  }
+
+  const templateParams = {
+    from_name: name,
+    to_email: ORDER_NOTIFICATION_EMAIL,
+    order_id: orderId,
+    order_items: items.map(it => `${it.title} × ${it.qty}`).join(', '),
+    amount: fmt(amount),
+    phone: phone,
+    address: address
+  };
+
+  try {
+    // emailjs.send(serviceID, templateID, templateParams)
+    const resp = await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams);
+    orderMsg.style.display = 'block';
+    orderMsg.innerHTML = `Order ${orderId} placed — notification sent to ${escapeHtml(ORDER_NOTIFICATION_EMAIL)}.`;
+    // Clear cart if we checked out cart items
+    // If checkoutItems correspond to entire cart, clear cart
+    if (checkoutItems.length === cart.length) { cart = []; saveCart(); }
+    checkoutForm.reset();
+  } catch (err) {
+    console.error(err);
+    orderMsg.style.display = 'block';
+    orderMsg.style.color = 'red';
+    orderMsg.innerHTML = `Order placed locally but email failed to send. Check EmailJS keys and console.`;
+  }
+});
+
+/* =========================
+   Admin access - simple password
+   ========================= */
+const adminModal = document.getElementById('adminModal');
+const openAdminBtn = document.getElementById('openAdminBtn');
+const closeAdmin = document.getElementById('closeAdmin');
+const adminPasswordInput = document.getElementById('adminPassword');
+
+openAdminBtn.addEventListener('click', ()=>{
+  // prompt for password if already set
+  if (!adminPassword) {
+    // no password set: open admin directly (first time)
+    adminModal.style.display = 'flex';
+  } else {
+    const attempt = prompt('Enter admin password to open Admin panel:');
+    if (attempt === adminPassword) adminModal.style.display = 'flex';
+    else alert('Wrong password');
+  }
+});
+
+closeAdmin.addEventListener('click', ()=> adminModal.style.display = 'none');
+
+/* Save admin password changes */
+adminPasswordInput.value = adminPassword;
+adminPasswordInput.addEventListener('change', ()=>{
+  const p = adminPasswordInput.value.trim();
+  setAdminPass(p);
+  alert('Admin password saved locally.');
+});
+
+/* close modals when clicking outside */
+[adminModal, checkoutModal].forEach(mod => {
+  mod.addEventListener('click', (e)=> { if (e.target === mod) mod.style.display = 'none'; });
+});
+
+/* =========================
+   Small helpers
+   ========================= */
+function escapeHtml(str){ return String(str || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* initial render */
+renderProducts();
+renderCart();
+updateCartBadge();
+
+/* load sample data if empty (optional convenience) */
+if (products.length===0){
+  // push a couple of sample products to help UI exploration
+  const svg1 = `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400"><rect width="100%" height="100%" fill="%23eaf1ff"/><text x="50%" y="50%" font-size="28" text-anchor="middle" fill="%23222" dy=".3em">Smartphone</text></svg>')}`;
+  const svg2 = `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400"><rect width="100%" height="100%" fill="%23fff2e6"/><text x="50%" y="50%" font-size="28" text-anchor="middle" fill="%23222" dy=".3em">Running Shoes</text></svg>')}`;
+  products.push({ id: uid(), title:'Smartphone X', price:12999.00, category:'Electronics', image: svg1 });
+  products.push({ id: uid(), title:'Running Shoes Pro', price:3499.00, category:'Footwear', image: svg2 });
+  saveProducts(); renderProducts();
+}
+
+/* Keyboard shortcuts */
+window.addEventListener('keydown', (e)=>{
+  if (e.key==='/' && document.activeElement.tagName !== 'INPUT') {
+    e.preventDefault(); document.getElementById('searchInput').focus();
+  }
+});
+</script>
+
+<!--
+===========================
+INSTRUCTIONS (summary)
+===========================
+
+1) Save this file as dipam_shop.html and open it in your browser.
+
+2) Email notifications:
+   - Create a free account at https://www.emailjs.com
+   - Add a service (e.g., Gmail) and create an email template.
+   - In the EmailJS template, include variables:
+       from_name, to_email, order_id, order_items, amount, phone, address
+   - Copy Service ID, Template ID, and Public (user) key.
+   - Replace the placeholders in the top of this HTML:
+       const EMAILJS_SERVICE_ID = 'YOUR_SERVICE_ID';
+       const EMAILJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID';
+       const EMAILJS_PUBLIC_KEY = 'YOUR_PUBLIC_KEY';
+   - EmailJS typically requires also allowing the sending address in the EmailJS dashboard.
+
+3) Admin access:
+   - Click "Admin". The first time no password is required; set a password in the admin modal field.
+   - After setting, opening Admin will prompt for that password.
+   - Products are stored in your browser (localStorage) — they persist on your machine/browser only.
+
+4) Notes & limitations:
+   - This app is entirely client-side; images are stored as base64 in localStorage.
+     Large images or many products can fill browser storage.
+   - EmailJS free tier has limits (see emailjs.com). If you plan production use, consider a backend (Node.js + SMTP or Firebase Cloud Function) for reliability.
+   - For a public multi-user site (real Flipkart-like), you'll need a proper backend and database.
+
+If you want, I can:
+ - generate a ready-to-deploy Node.js backend to host this plus send emails via SMTP,
+ - or integrate it with Firebase Firestore and Cloud Functions for persistent multi-device use.
+
+Tell me which next step you want and I'll create it.
+-->
+</body>
+</html>
