@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>DipamShop — Mini Flipkart-like App</title>
+<title>D-MART</title>
 
 <!-- EmailJS SDK (client-side) -->
 <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3.2.0/dist/email.min.js"></script>
@@ -217,13 +217,13 @@ let adminPassword = localStorage.getItem(ADMIN_PASS_KEY) || '';
      Example template variables we send: from_name, to_email, order_id, order_items, amount, phone, address
   4. Copy Service ID, Template ID, and Public Key and paste into the placeholders below.
 ------------------------------------ */
-const EMAILJS_SERVICE_ID = 'service_jdkopui';
+const EMAILJS_SERVICE_ID = 'service_c4p68ag';
 const EMAILJS_TEMPLATE_ID = 'template_214uijp';
 const EMAILJS_PUBLIC_KEY = 'E8cAV9p-pSYDnM8kE';
 const ORDER_NOTIFICATION_EMAIL = 'dipamghosh85@gmail.com'; // recipient (you)
 
 /* Initialize EmailJS - will work after you set public key */
-if (window.emailjs && EMAILJS_PUBLIC_KEY && EMAILJS_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY') {
+if (window.emailjs && EMAILJS_PUBLIC_KEY && EMAILJS_PUBLIC_KEY !== 'E8cAV9p-pSYDnM8kE') {
   emailjs.init(EMAILJS_PUBLIC_KEY);
 }
 
@@ -524,7 +524,7 @@ checkoutForm.addEventListener('submit', async (e)=>{
       !EMAILJS_PUBLIC_KEY || EMAILJS_PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
     // If EmailJS not configured, still show a local confirmation
     orderMsg.style.display = 'block';
-    orderMsg.innerHTML = `Order ${orderId} placed locally. Email not sent — configure EmailJS keys in the HTML.`;
+    orderMsg.innerHTML = `Order ${orderId} is not placed please Try again!`;
     // After placing order, clear cart if we checked out cart
     if (checkoutItems.length === cart.length) { cart = []; saveCart(); }
     return;
@@ -553,7 +553,7 @@ checkoutForm.addEventListener('submit', async (e)=>{
     console.error(err);
     orderMsg.style.display = 'block';
     orderMsg.style.color = 'red';
-    orderMsg.innerHTML = `Order placed locally but email failed to send. Check EmailJS keys and console.`;
+    orderMsg.innerHTML = `Order placed locally but there is some issue occuring`;
   }
 });
 
